@@ -160,13 +160,12 @@ def main():
         app.add_error_handler(error_handler)
         
         logger.info("Bot iniciado. Pressione Ctrl+C para encerrar.")
+        
+        # CORREÇÃO: Removidos os parâmetros não suportados
         app.run_polling(
-            close_loop=False,
-            stop_signals=[],
             timeout=30,
-            read_timeout=30,
-            connect_timeout=30,
-            pool_timeout=30
+            close_loop=False,
+            stop_signals=[]
         )
         
     except Exception as e:
