@@ -11,7 +11,6 @@ import datetime
 import logging
 import os
 import sys
-import asyncio
 
 # Configuração de logging
 logging.basicConfig(
@@ -22,6 +21,9 @@ logger = logging.getLogger(__name__)
 
 # Obter token de variável de ambiente
 TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
+if not TOKEN:
+    logger.error("TOKEN não configurado! Defina a variável de ambiente TELEGRAM_BOT_TOKEN.")
+    sys.exit(1)
 
 corredores = {
     "Corredor A Térreo": [f"Sala {i:02}" for i in range(1, 20)],
@@ -144,57 +146,34 @@ async def error_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update and update.effective_message:
         await update.effective_message.reply_text("⚠️ Ocorreu um erro inesperado. Os desenvolvedores foram notificados.")
 
-async def setup_webhook(application):
-    # Configurar webhook com a URL completa
-    webhook_url = os.environ.get('WEBHOOK_URL')
-    if not webhook_url:
-        logger.error("WEBHOOK_URL não configurada!")
-        return
-    
-    token = application.bot.token
-    full_webhook_url = f"{webhook_url}/{token}"
-    
-    logger.info(f"Configurando webhook: {full_webhook_url}")
-    await application.bot.set_webhook(url=full_webhook_url)
+# Cria a aplicação como variável global
+app = Application.builder().token(TOKEN).build()
+
+# Adicionar handlers
+app.add_handler(CommandHandler("start", start))
+app.add_handler(CommandHandler("ver", ver))
+app.add_handler(CallbackQueryHandler(button_handler))
+app.add_handler(MessageHandler(filters.PHOTO, photo_handler))
+app.add_error_handler(error_handler)
 
 def main():
     logger.info("Iniciando aplicação...")
     
-    try:
-        # Construir aplicação
-        app = Application.builder().token(TOKEN).build()
-        
-        # Adicionar handlers
-        app.add_handler(CommandHandler("start", start))
-        app.add_handler(CommandHandler("ver", ver))
-        app.add_handler(CallbackQueryHandler(button_handler))
-        app.add_handler(MessageHandler(filters.PHOTO, photo_handler))
-        
-        # Handler de erros
-        app.add_error_handler(error_handler)
-        
-        # Verificar se devemos usar webhook ou polling
-        webhook_url = os.environ.get('WEBHOOK_URL')
-        port = int(os.environ.get('PORT', 5000))
-        
-        if webhook_url:
-            # Modo webhook (produção)
-            app.run_webhook(
-                listen="0.0.0.0",
-                port=port,
-                webhook_url=f"{webhook_url}/{TOKEN}",
-                post_init=setup_webhook
-            )
-        else:
-            # Modo polling (desenvolvimento)
-            logger.warning("Modo de desenvolvimento: usando polling")
-            app.run_polling()
-        
-    except Exception as e:
-        logger.critical(f"Erro fatal: {e}")
-        sys.exit(1)
-    finally:
-        logger.info("Aplicação encerrada.")
+    webhook_url = os.environ.get('WEBHOOK_URL')
+    port = int(os.environ.get('PORT', 5000))
+    
+    if webhook_url:
+        # Modo webhook (produção)
+        logger.info(f"Configurando webhook: {webhook_url}/{TOKEN}")
+        app.run_webhook(
+            listen="0.0.0.0",
+            port=port,
+            webhook_url=f"{webhook_url}/{TOKEN}"
+        )
+    else:
+        # Modo polling (desenvolvimento)
+        logger.warning("Modo de desenvolvimento: usando polling")
+        app.run_polling()
 
 if __name__ == "__main__":
     main()
