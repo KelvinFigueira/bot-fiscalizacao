@@ -1,0 +1,7 @@
+services:
+  - type: web
+    name: bot-fiscalizacao
+    env: python
+    buildCommand: ""
+    startCommand: "python main.py"
+    pythonVersion: 3.11
