@@ -1,111 +1,90 @@
-import logging
-from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, InputMediaPhoto
-from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, filters, CallbackQueryHandler, ContextTypes
-from datetime import datetime
-
-TOKEN = "7872376410:AAHYX0nl302EmXChhZN5bsp0JwBCugMP35A"
-
-logging.basicConfig(
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    level=logging.INFO
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
+from telegram.ext import (
+    ApplicationBuilder, CommandHandler,
+    MessageHandler, CallbackQueryHandler,
+    ContextTypes, filters
 )
+import datetime
 
-# Estrutura de corredores e salas
+TOKEN = "SEU_TOKEN_AQUI"  # coloque seu token aqui
+
 corredores = {
-    "Corredor A Térreo": list(range(1, 20)),
-    "Corredor B Térreo": list(range(41, 52)),
-    "Corredor C Térreo": list(range(80, 89)),
-    "Corredor A 1º Piso": list(range(20, 41)),
-    "Corredor B 1º Piso": list(range(53, 69)),
-    "Corredor C 1º Piso": list(range(89, 100)),
+    "Corredor A Térreo": [f"Sala {i:02}" for i in range(1, 20)],
+    "Corredor B Térreo": [f"Sala {i}" for i in range(41, 52)],
+    "Corredor C Térreo": [f"Sala {i}" for i in range(80, 89)],
+    "Corredor A 1º Piso": [f"Sala {i}" for i in range(20, 41)],
+    "Corredor B 1º Piso": [f"Sala {i}" for i in range(53, 69)],
+    "Corredor C 1º Piso": [f"Sala {i}" for i in range(89, 100)],
 }
 
-user_sessions = {}
-photo_storage = {}  # Estrutura: {(corredor, sala, tipo, data): file_id}
+# Dicionário para armazenar dados
+registros = {}
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    keyboard = [[InlineKeyboardButton(c, callback_data=f"corredor|{c}")] for c in corredores]
-    await update.message.reply_text("Selecione o corredor:", reply_markup=InlineKeyboardMarkup(keyboard))
+    keyboard = [[InlineKeyboardButton(text=c, callback_data=f"corredor|{c}")]
+                for c in corredores.keys()]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    await update.message.reply_text("Selecione o corredor:", reply_markup=reply_markup)
 
-async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
-
     data = query.data.split("|")
-    tipo, valor = data[0], data[1]
 
-    user_id = query.from_user.id
-    if user_id not in user_sessions:
-        user_sessions[user_id] = {}
+    if data[0] == "corredor":
+        corredor = data[1]
+        salas = corredores[corredor]
+        keyboard = [[InlineKeyboardButton(text=s, callback_data=f"sala|{corredor}|{s}")]
+                    for s in salas]
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        await query.edit_message_text(text=f"Salas do {corredor}:", reply_markup=reply_markup)
 
-    if tipo == "corredor":
-        user_sessions[user_id]["corredor"] = valor
-        salas = corredores[valor]
-        keyboard = [[InlineKeyboardButton(f"Sala {s:02}", callback_data=f"sala|{s}")] for s in salas]
-        await query.message.reply_text("Selecione a sala:", reply_markup=InlineKeyboardMarkup(keyboard))
-
-    elif tipo == "sala":
-        user_sessions[user_id]["sala"] = valor
+    elif data[0] == "sala":
+        corredor, sala = data[1], data[2]
         keyboard = [
             [
-                InlineKeyboardButton("Chegada", callback_data="tipo|Chegada"),
-                InlineKeyboardButton("Saída", callback_data="tipo|Saida")
+                InlineKeyboardButton("📷 Chegada", callback_data=f"foto|{corredor}|{sala}|Chegada"),
+                InlineKeyboardButton("📷 Saída", callback_data=f"foto|{corredor}|{sala}|Saída")
             ]
         ]
-        await query.message.reply_text("Chegada ou Saída?", reply_markup=InlineKeyboardMarkup(keyboard))
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        await query.edit_message_text(text=f"{sala} - Selecione o tipo de foto:", reply_markup=reply_markup)
 
-    elif tipo == "tipo":
-        user_sessions[user_id]["tipo"] = valor
-        await query.message.reply_text("Envie agora a foto do data show.")
+    elif data[0] == "foto":
+        corredor, sala, tipo = data[1], data[2], data[3]
+        context.user_data["corredor"] = corredor
+        context.user_data["sala"] = sala
+        context.user_data["tipo"] = tipo
+        await query.edit_message_text(f"Envie a foto da **{sala} ({tipo})** agora:")
 
-async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user_id = update.message.from_user.id
-    if user_id not in user_sessions or "corredor" not in user_sessions[user_id]:
-        await update.message.reply_text("Use /start para iniciar o envio da foto.")
-        return
+async def photo_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user = update.message.from_user
+    corredor = context.user_data.get("corredor")
+    sala = context.user_data.get("sala")
+    tipo = context.user_data.get("tipo")
+    data_hora = datetime.datetime.now().strftime("%d/%m/%Y %H:%M")
 
-    session = user_sessions[user_id]
-    corredor = session["corredor"]
-    sala = session["sala"]
-    tipo = session["tipo"]
-    data = datetime.now().strftime("%Y-%m-%d")
+    if corredor and sala and tipo:
+        legenda = f"{tipo} registrada por {user.first_name}\n📍 {corredor} - {sala}\n🕒 {data_hora}"
+        registros.setdefault(corredor, {}).setdefault(sala, []).append(legenda)
 
-    file_id = update.message.photo[-1].file_id
-    photo_storage[(corredor, sala, tipo, data)] = file_id
-
-    await update.message.reply_text(
-        f"✅ Foto registrada com sucesso!\n\n"
-        f"📍 Corredor: {corredor}\n"
-        f"🔢 Sala: {sala}\n"
-        f"🕒 Tipo: {tipo}\n"
-        f"📅 Data: {data}"
-    )
+        photo = update.message.photo[-1].file_id
+        await context.bot.send_photo(chat_id=update.effective_chat.id, photo=photo, caption=legenda)
 
 async def ver(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if len(context.args) < 3:
-        await update.message.reply_text("Uso: /ver <Corredor> <Sala> <Data>\nEx: /ver 'Corredor A Térreo' 01 2025-07-02")
-        return
+    msg = "📋 *Registros de Fotos:*\n\n"
+    for corredor, salas in registros.items():
+        msg += f"🏢 *{corredor}*\n"
+        for sala, fotos in salas.items():
+            msg += f"  📌 {sala}: {len(fotos)} foto(s)\n"
+    await update.message.reply_text(msg, parse_mode="Markdown")
 
-    corredor = context.args[0]
-    sala = context.args[1]
-    data = context.args[2]
+if __name__ == "__main__":
+    app = ApplicationBuilder().token(TOKEN).build()
 
-    mensagens = []
-    for tipo in ["Chegada", "Saida"]:
-        key = (corredor, sala, tipo, data)
-        if key in photo_storage:
-            await update.message.reply_photo(photo_storage[key], caption=f"{tipo} registrada")
-        else:
-            mensagens.append(f"❌ Sem foto de {tipo}")
+    app.add_handler(CommandHandler("start", start))
+    app.add_handler(CommandHandler("ver", ver))
+    app.add_handler(CallbackQueryHandler(button_handler))
+    app.add_handler(MessageHandler(filters.PHOTO, photo_handler))
 
-    if mensagens:
-        await update.message.reply_text("\n".join(mensagens))
-
-app = ApplicationBuilder().token(TOKEN).build()
-app.add_handler(CommandHandler("start", start))
-app.add_handler(CallbackQueryHandler(handle_callback))
-app.add_handler(MessageHandler(filters.PHOTO, handle_photo))
-app.add_handler(CommandHandler("ver", ver))
-
-if __name__ == '__main__':
     app.run_polling()
