@@ -6,7 +6,7 @@ from telegram.ext import (
 )
 import datetime
 
-TOKEN = "SEU_TOKEN_AQUI"  # coloque seu token aqui
+TOKEN = "7872376410:AAHYX0nl302EmXChhZN5bsp0JwBCugMP35A"
 
 corredores = {
     "Corredor A Térreo": [f"Sala {i:02}" for i in range(1, 20)],
@@ -17,7 +17,6 @@ corredores = {
     "Corredor C 1º Piso": [f"Sala {i}" for i in range(89, 100)],
 }
 
-# Dicionário para armazenar dados
 registros = {}
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
