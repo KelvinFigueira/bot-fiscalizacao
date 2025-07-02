@@ -1,29 +1,12 @@
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import (
-    Application,
-    CommandHandler,
-    MessageHandler,
-    CallbackQueryHandler,
-    ContextTypes,
-    filters
+    ApplicationBuilder, CommandHandler,
+    MessageHandler, CallbackQueryHandler,
+    ContextTypes, filters
 )
 import datetime
-import logging
-import os
-import asyncio
 
-# Configuração de logging
-logging.basicConfig(
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    level=logging.INFO
-)
-logger = logging.getLogger(__name__)
-
-# Obter token de variável de ambiente
-TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
-if not TOKEN:
-    logger.error("TOKEN não configurado! Defina a variável de ambiente TELEGRAM_BOT_TOKEN.")
-    exit(1)
+TOKEN = "7872376410:AAHYX0nl302EmXChhZN5bsp0JwBCugMP35A"
 
 corredores = {
     "Corredor A Térreo": [f"Sala {i:02}" for i in range(1, 20)],
@@ -34,145 +17,73 @@ corredores = {
     "Corredor C 1º Piso": [f"Sala {i}" for i in range(89, 100)],
 }
 
-# Dicionário para armazenar registros
 registros = {}
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    try:
-        keyboard = [[InlineKeyboardButton(text=c, callback_data=f"corredor|{c}")]
-                    for c in corredores.keys()]
-        reply_markup = InlineKeyboardMarkup(keyboard)
-        await update.message.reply_text("Selecione o corredor:", reply_markup=reply_markup)
-    except Exception as e:
-        logger.error(f"Erro no comando /start: {e}")
-        await update.message.reply_text("❌ Ocorreu um erro. Tente novamente mais tarde.")
+    keyboard = [[InlineKeyboardButton(text=c, callback_data=f"corredor|{c}")]
+                for c in corredores.keys()]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    await update.message.reply_text("Selecione o corredor:", reply_markup=reply_markup)
 
 async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    try:
-        query = update.callback_query
-        await query.answer()
-        data = query.data.split("|")
+    query = update.callback_query
+    await query.answer()
+    data = query.data.split("|")
 
-        if data[0] == "corredor":
-            corredor = data[1]
-            salas = corredores[corredor]
-            keyboard = [[InlineKeyboardButton(text=s, callback_data=f"sala|{corredor}|{s}")]
-                        for s in salas]
-            reply_markup = InlineKeyboardMarkup(keyboard)
-            await query.edit_message_text(text=f"Salas do {corredor}:", reply_markup=reply_markup)
+    if data[0] == "corredor":
+        corredor = data[1]
+        salas = corredores[corredor]
+        keyboard = [[InlineKeyboardButton(text=s, callback_data=f"sala|{corredor}|{s}")]
+                    for s in salas]
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        await query.edit_message_text(text=f"Salas do {corredor}:", reply_markup=reply_markup)
 
-        elif data[0] == "sala":
-            corredor, sala = data[1], data[2]
-            keyboard = [
-                [
-                    InlineKeyboardButton("📷 Chegada", callback_data=f"foto|{corredor}|{sala}|Chegada"),
-                    InlineKeyboardButton("📷 Saída", callback_data=f"foto|{corredor}|{sala}|Saída")
-                ]
+    elif data[0] == "sala":
+        corredor, sala = data[1], data[2]
+        keyboard = [
+            [
+                InlineKeyboardButton("📷 Chegada", callback_data=f"foto|{corredor}|{sala}|Chegada"),
+                InlineKeyboardButton("📷 Saída", callback_data=f"foto|{corredor}|{sala}|Saída")
             ]
-            reply_markup = InlineKeyboardMarkup(keyboard)
-            await query.edit_message_text(text=f"{sala} - Selecione o tipo de foto:", reply_markup=reply_markup)
+        ]
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        await query.edit_message_text(text=f"{sala} - Selecione o tipo de foto:", reply_markup=reply_markup)
 
-        elif data[0] == "foto":
-            corredor, sala, tipo = data[1], data[2], data[3]
-            context.user_data["corredor"] = corredor
-            context.user_data["sala"] = sala
-            context.user_data["tipo"] = tipo
-            await query.edit_message_text(f"Envie a foto da **{sala} ({tipo})** agora:")
-            
-    except Exception as e:
-        logger.error(f"Erro no button_handler: {e}")
-        await context.bot.send_message(
-            chat_id=update.effective_chat.id,
-            text="❌ Ocorreu um erro ao processar sua solicitação."
-        )
+    elif data[0] == "foto":
+        corredor, sala, tipo = data[1], data[2], data[3]
+        context.user_data["corredor"] = corredor
+        context.user_data["sala"] = sala
+        context.user_data["tipo"] = tipo
+        await query.edit_message_text(f"Envie a foto da **{sala} ({tipo})** agora:")
 
 async def photo_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    try:
-        user = update.message.from_user
-        corredor = context.user_data.get("corredor")
-        sala = context.user_data.get("sala")
-        tipo = context.user_data.get("tipo")
-        
-        if not all([corredor, sala, tipo]):
-            await update.message.reply_text("⚠️ Por favor, selecione uma sala primeiro usando o menu.")
-            return
+    user = update.message.from_user
+    corredor = context.user_data.get("corredor")
+    sala = context.user_data.get("sala")
+    tipo = context.user_data.get("tipo")
+    data_hora = datetime.datetime.now().strftime("%d/%m/%Y %H:%M")
 
-        data_hora = datetime.datetime.now().strftime("%d/%m/%Y %H:%M")
+    if corredor and sala and tipo:
         legenda = f"{tipo} registrada por {user.first_name}\n📍 {corredor} - {sala}\n🕒 {data_hora}"
-        
-        # Armazenar registro corretamente
-        if corredor not in registros:
-            registros[corredor] = {}
-        if sala not in registros[corredor]:
-            registros[corredor][sala] = []
-            
-        registros[corredor][sala].append(legenda)
+        registros.setdefault(corredor, {}).setdefault(sala, []).append(legenda)
 
         photo = update.message.photo[-1].file_id
-        await context.bot.send_photo(
-            chat_id=update.effective_chat.id,
-            photo=photo,
-            caption=legenda
-        )
-        
-        # Limpar dados temporários
-        context.user_data.pop("corredor", None)
-        context.user_data.pop("sala", None)
-        context.user_data.pop("tipo", None)
-        
-    except Exception as e:
-        logger.error(f"Erro no photo_handler: {e}")
-        await update.message.reply_text("❌ Falha ao processar a foto. Tente novamente.")
+        await context.bot.send_photo(chat_id=update.effective_chat.id, photo=photo, caption=legenda)
 
 async def ver(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    try:
-        if not registros:
-            await update.message.reply_text("📭 Nenhum registro encontrado.")
-            return
-            
-        msg = "📋 *Registros de Fotos:*\n\n"
-        for corredor, salas in registros.items():
-            msg += f"🏢 *{corredor}*\n"
-            for sala, fotos in salas.items():
-                msg += f"  📌 {sala}: {len(fotos)} foto(s)\n"
-        await update.message.reply_text(msg, parse_mode="Markdown")
-        
-    except Exception as e:
-        logger.error(f"Erro no comando /ver: {e}")
-        await update.message.reply_text("❌ Ocorreu um erro ao recuperar os registros.")
+    msg = "📋 *Registros de Fotos:*\n\n"
+    for corredor, salas in registros.items():
+        msg += f"🏢 *{corredor}*\n"
+        for sala, fotos in salas.items():
+            msg += f"  📌 {sala}: {len(fotos)} foto(s)\n"
+    await update.message.reply_text(msg, parse_mode="Markdown")
 
-async def error_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    logger.error(f"Erro não tratado: {context.error}")
-    if update and update.effective_message:
-        await update.effective_message.reply_text("⚠️ Ocorreu um erro inesperado. Os desenvolvedores foram notificados.")
+if __name__ == "__main__":
+    app = ApplicationBuilder().token(TOKEN).build()
 
-def run_bot():
-    logger.info("Iniciando aplicação...")
-    
-    app = Application.builder().token(TOKEN).build()
-
-    # Adicionar handlers
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("ver", ver))
     app.add_handler(CallbackQueryHandler(button_handler))
     app.add_handler(MessageHandler(filters.PHOTO, photo_handler))
-    app.add_error_handler(error_handler)
 
-    webhook_url = os.environ.get('WEBHOOK_URL')
-    port = int(os.environ.get('PORT', 5000))
-    
-    if webhook_url:
-        # Modo webhook (produção)
-        logger.info(f"Configurando webhook: {webhook_url}/{TOKEN}")
-        app.run_webhook(
-            listen="0.0.0.0",
-            port=port,
-            webhook_url=f"{webhook_url}/{TOKEN}"
-        )
-    else:
-        # Modo polling (desenvolvimento)
-        logger.warning("Modo de desenvolvimento: usando polling")
-        app.run_polling()
-
-if __name__ == "__main__":
-    run_bot()
+    app.run_polling()
