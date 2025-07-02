@@ -10,7 +10,7 @@ from telegram.ext import (
 import datetime
 import logging
 import os
-import sys
+import asyncio
 
 # Configuração de logging
 logging.basicConfig(
@@ -23,7 +23,7 @@ logger = logging.getLogger(__name__)
 TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
 if not TOKEN:
     logger.error("TOKEN não configurado! Defina a variável de ambiente TELEGRAM_BOT_TOKEN.")
-    sys.exit(1)
+    exit(1)
 
 corredores = {
     "Corredor A Térreo": [f"Sala {i:02}" for i in range(1, 20)],
@@ -146,19 +146,18 @@ async def error_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update and update.effective_message:
         await update.effective_message.reply_text("⚠️ Ocorreu um erro inesperado. Os desenvolvedores foram notificados.")
 
-# Cria a aplicação como variável global
-app = Application.builder().token(TOKEN).build()
-
-# Adicionar handlers
-app.add_handler(CommandHandler("start", start))
-app.add_handler(CommandHandler("ver", ver))
-app.add_handler(CallbackQueryHandler(button_handler))
-app.add_handler(MessageHandler(filters.PHOTO, photo_handler))
-app.add_error_handler(error_handler)
-
-def main():
+def run_bot():
     logger.info("Iniciando aplicação...")
     
+    app = Application.builder().token(TOKEN).build()
+
+    # Adicionar handlers
+    app.add_handler(CommandHandler("start", start))
+    app.add_handler(CommandHandler("ver", ver))
+    app.add_handler(CallbackQueryHandler(button_handler))
+    app.add_handler(MessageHandler(filters.PHOTO, photo_handler))
+    app.add_error_handler(error_handler)
+
     webhook_url = os.environ.get('WEBHOOK_URL')
     port = int(os.environ.get('PORT', 5000))
     
@@ -176,4 +175,4 @@ def main():
         app.run_polling()
 
 if __name__ == "__main__":
-    main()
+    run_bot()
