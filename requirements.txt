@@ -1,1 +1,2 @@
 python-telegram-bot==22.2
+gunicorn==21.2.0
