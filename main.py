@@ -24,12 +24,12 @@ app = Flask(__name__)
 
 # Dados dos corredores (como fornecido)
 CORREDORES = {
-    "Corredor A Térreo": [f"Sala {i:02d}" for i in range(1, 20)],
-    "Corredor B Térreo": [f"Sala {i}" for i in range(41, 52)],
-    "Corredor C Térreo": [f"Sala {i}" for i in range(80, 89)],
-    "Corredor A 1º Piso": [f"Sala {i}" for i in range(20, 41)],
-    "Corredor B 1º Piso": [f"Sala {i}" for i in range(53, 69)],
-    "Corredor C 1º Piso": [f"Sala {i}" for i in range(89, 100)],
+    "Corredor A Térreo": [f"Sala {i:02d}" for i in range(1, 19)],
+    "Corredor B Térreo": [f"Sala {i}" for i in range(41, 51)],
+    "Corredor C Térreo": [f"Sala {i}" for i in range(80, 88)],
+    "Corredor A 1º Piso": [f"Sala {i}" for i in range(20, 40)],
+    "Corredor B 1º Piso": [f"Sala {i}" for i in range(53, 68)],
+    "Corredor C 1º Piso": [f"Sala {i}" for i in range(89, 99)],
 }
 
 # Estados da conversa
