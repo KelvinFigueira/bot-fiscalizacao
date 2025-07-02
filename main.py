@@ -1,8 +1,11 @@
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import (
-    ApplicationBuilder, CommandHandler,
-    MessageHandler, CallbackQueryHandler,
-    ContextTypes, filters
+    Application,  # Alterado de ApplicationBuilder para Application
+    CommandHandler,
+    MessageHandler,
+    CallbackQueryHandler,
+    ContextTypes,
+    filters
 )
 import datetime
 
@@ -65,7 +68,14 @@ async def photo_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     if corredor and sala and tipo:
         legenda = f"{tipo} registrada por {user.first_name}\n📍 {corredor} - {sala}\n🕒 {data_hora}"
-        registros.setdefault(corredor, {}).setdefault(sala, []).append(legenda)
+        
+        # Armazenar registro corretamente
+        if corredor not in registros:
+            registros[corredor] = {}
+        if sala not in registros[corredor]:
+            registros[corredor][sala] = []
+            
+        registros[corredor][sala].append(legenda)
 
         photo = update.message.photo[-1].file_id
         await context.bot.send_photo(chat_id=update.effective_chat.id, photo=photo, caption=legenda)
@@ -79,7 +89,8 @@ async def ver(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(msg, parse_mode="Markdown")
 
 if __name__ == "__main__":
-    app = ApplicationBuilder().token(TOKEN).build()
+    # CORREÇÃO PRINCIPAL: Usar Application.builder() em vez de ApplicationBuilder()
+    app = Application.builder().token(TOKEN).build()
 
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("ver", ver))
