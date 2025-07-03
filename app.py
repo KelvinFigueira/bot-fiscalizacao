@@ -149,6 +149,7 @@ def ver_registro(update: Update, context: CallbackContext):
         return
 
     try:
+        # Corredor tem duas palavras
         corredor = args[0] + " " + args[1]
         sala = args[2]
         data = args[3]
@@ -184,8 +185,9 @@ def ver_registro(update: Update, context: CallbackContext):
         context.bot.send_photo(update.effective_chat.id, saida[1])
 
 def main():
-    # Configuração correta para a versão 20.x
-    updater = Updater(token=TOKEN, use_context=True)
+    # Correção crucial: forma correta de inicializar o Updater
+    updater = Updater(TOKEN)
+    
     dp = updater.dispatcher
 
     # Handlers
