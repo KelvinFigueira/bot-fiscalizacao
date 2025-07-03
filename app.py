@@ -5,7 +5,7 @@ from telegram.ext import (
     Updater, CommandHandler, CallbackContext, 
     CallbackQueryHandler, ConversationHandler
 )
-from datetime import datetime
+from datetime import datetime, timedelta
 import sqlite3
 
 # Configurações
@@ -14,16 +14,16 @@ PORT = int(os.environ.get('PORT', 8443))
 
 # Dados dos corredores
 CORREDORES = {
-    "Corredor A Térreo": list(range(1, 19)),
-    "Corredor B Térreo": list(range(41, 51)),
-    "Corredor C Térreo": list(range(80, 88)),
-    "Corredor A 1º Piso": list(range(20, 40)),
-    "Corredor B 1º Piso": list(range(53, 68)),
-    "Corredor C 1º Piso": list(range(89, 99)),
+    "Corredor A Térreo": list(range(1, 20)),
+    "Corredor B Térreo": list(range(41, 52)),
+    "Corredor C Térreo": list(range(80, 89)),
+    "Corredor A 1º Piso": list(range(20, 41)),
+    "Corredor B 1º Piso": list(range(53, 69)),
+    "Corredor C 1º Piso": list(range(89, 100)),
 }
 
 # Estados da conversa
-ESCOLHER_CORREDOR, ESCOLHER_SALA, ESCOLHER_TIPO = range(3)
+ESCOLHER_CORREDOR, ESCOLHER_SALA, ESCOLHER_TIPO, VER_CORREDOR, VER_SALA, VER_DATA = range(6)
 
 # Inicialização do banco de dados
 def init_db():
@@ -67,7 +67,7 @@ def registrar(update: Update, context: CallbackContext):
     )
     return ESCOLHER_CORREDOR
 
-# Handler de escolha de corredor
+# Handler de escolha de corredor (registro)
 def escolher_corredor(update: Update, context: CallbackContext):
     query = update.callback_query
     query.answer()
@@ -85,7 +85,7 @@ def escolher_corredor(update: Update, context: CallbackContext):
     )
     return ESCOLHER_SALA
 
-# Handler de escolha de sala
+# Handler de escolha de sala (registro)
 def escolher_sala(update: Update, context: CallbackContext):
     query = update.callback_query
     query.answer()
@@ -106,7 +106,7 @@ def escolher_sala(update: Update, context: CallbackContext):
     )
     return ESCOLHER_TIPO
 
-# Handler de escolha de tipo
+# Handler de escolha de tipo (registro)
 def escolher_tipo(update: Update, context: CallbackContext):
     query = update.callback_query
     query.answer()
@@ -142,27 +142,49 @@ def escolher_tipo(update: Update, context: CallbackContext):
     context.user_data.clear()
     return ConversationHandler.END
 
-def ver_registro(update: Update, context: CallbackContext):
-    args = context.args
-    if len(args) < 3:
-        update.message.reply_text("⚠️ Use: /ver \"Corredor\" Sala Data\nEx: /ver \"Corredor A Térreo\" 07 2025-07-02")
-        return
+# /ver - Consulta registros do dia atual
+def ver(update: Update, context: CallbackContext):
+    keyboard = [
+        [InlineKeyboardButton(corredor, callback_data=f"vercorredor_{corredor}")]
+        for corredor in CORREDORES.keys()
+    ]
+    update.message.reply_text(
+        "📍 Escolha o Corredor para ver registros de hoje:",
+        reply_markup=InlineKeyboardMarkup(keyboard)
+    )
+    return VER_CORREDOR
 
-    try:
-        # Corredor tem duas palavras
-        corredor = args[0] + " " + args[1]
-        sala = args[2]
-        data = args[3]
-    except:
-        update.message.reply_text("⚠️ Formato inválido! Use: /ver \"Corredor\" Sala Data")
-        return
+# Handler para escolher corredor (ver)
+def ver_corredor(update: Update, context: CallbackContext):
+    query = update.callback_query
+    query.answer()
+    corredor = query.data.split("_", 1)[1]
+    context.user_data['ver_corredor'] = corredor
+    
+    salas = CORREDORES[corredor]
+    keyboard = [
+        [InlineKeyboardButton(str(sala), callback_data=f"versala_{sala}")]
+        for sala in salas
+    ]
+    query.edit_message_text(
+        f"📍 Corredor: {corredor}\n🔢 Escolha a Sala:",
+        reply_markup=InlineKeyboardMarkup(keyboard)
+    )
+    return VER_SALA
 
+# Handler para escolher sala (ver)
+def ver_sala(update: Update, context: CallbackContext):
+    query = update.callback_query
+    query.answer()
+    sala = query.data.split("_", 1)[1]
+    corredor = context.user_data['ver_corredor']
+    data_hoje = datetime.now().strftime("%Y-%m-%d")
+    
     conn = sqlite3.connect('registros.db')
     c = conn.cursor()
-    
     c.execute('''SELECT tipo, file_id FROM registros 
                  WHERE corredor=? AND sala=? AND data=?''',
-              (corredor, sala, data))
+              (corredor, sala, data_hoje))
     registros = c.fetchall()
     conn.close()
 
@@ -170,32 +192,143 @@ def ver_registro(update: Update, context: CallbackContext):
     saida = next((r for r in registros if r[0] == "Saída"), None)
 
     resposta = (
-        f"📅 {data} - {corredor} - Sala {sala}\n\n"
+        f"📅 Hoje ({data_hoje}) - {corredor} - Sala {sala}\n\n"
         f"🖼️ Chegada:\n"
-        f"{'📎 [Foto]' if chegada else '❌ Não registrada'}\n\n"
+        f"{'✅ Registrada' if chegada else '❌ Não registrada'}\n\n"
         f"🖼️ Saída:\n"
-        f"{'📎 [Foto]' if saida else '❌ Não registrada'}"
+        f"{'✅ Registrada' if saida else '❌ Não registrada'}"
     )
     
-    update.message.reply_text(resposta)
+    query.edit_message_text(resposta)
     
     if chegada:
-        context.bot.send_photo(update.effective_chat.id, chegada[1])
+        context.bot.send_photo(chat_id=update.effective_chat.id, photo=chegada[1])
     if saida:
-        context.bot.send_photo(update.effective_chat.id, saida[1])
+        context.bot.send_photo(chat_id=update.effective_chat.id, photo=saida[1])
+    
+    context.user_data.clear()
+    return ConversationHandler.END
+
+# /registros - Consulta histórica
+def registros(update: Update, context: CallbackContext):
+    keyboard = [
+        [InlineKeyboardButton(corredor, callback_data=f"rgs_corredor_{corredor}")]
+        for corredor in CORREDORES.keys()
+    ]
+    update.message.reply_text(
+        "📍 Escolha o Corredor para consulta histórica:",
+        reply_markup=InlineKeyboardMarkup(keyboard)
+    )
+    return VER_CORREDOR
+
+# Handler para escolher sala (registros históricos)
+def registros_sala(update: Update, context: CallbackContext):
+    query = update.callback_query
+    query.answer()
+    corredor = query.data.split("_", 2)[2]
+    context.user_data['rgs_corredor'] = corredor
+    
+    salas = CORREDORES[corredor]
+    keyboard = [
+        [InlineKeyboardButton(str(sala), callback_data=f"rgs_sala_{sala}")]
+        for sala in salas
+    ]
+    query.edit_message_text(
+        f"📍 Corredor: {corredor}\n🔢 Escolha a Sala:",
+        reply_markup=InlineKeyboardMarkup(keyboard)
+    )
+    return VER_SALA
+
+# Handler para escolher data (registros históricos)
+def registros_data(update: Update, context: CallbackContext):
+    query = update.callback_query
+    query.answer()
+    sala = query.data.split("_", 2)[2]
+    corredor = context.user_data['rgs_corredor']
+    context.user_data['rgs_sala'] = sala
+    
+    # Gerar botões para os últimos 7 dias
+    hoje = datetime.now()
+    keyboard = []
+    for i in range(7):
+        data = hoje - timedelta(days=i)
+        data_str = data.strftime("%Y-%m-%d")
+        keyboard.append([InlineKeyboardButton(data_str, callback_data=f"rgs_data_{data_str}")])
+    
+    query.edit_message_text(
+        f"📍 Corredor: {corredor}\n"
+        f"🔢 Sala: {sala}\n"
+        "📅 Escolha a Data:",
+        reply_markup=InlineKeyboardMarkup(keyboard)
+    )
+    return VER_DATA
+
+# Handler para mostrar registros históricos
+def mostrar_registros(update: Update, context: CallbackContext):
+    query = update.callback_query
+    query.answer()
+    data = query.data.split("_", 2)[2]
+    corredor = context.user_data['rgs_corredor']
+    sala = context.user_data['rgs_sala']
+    
+    conn = sqlite3.connect('registros.db')
+    c = conn.cursor()
+    c.execute('''SELECT tipo, file_id, hora FROM registros 
+                 WHERE corredor=? AND sala=? AND data=?''',
+              (corredor, sala, data))
+    registros = c.fetchall()
+    conn.close()
+
+    # Organizar registros por tipo
+    registros_por_tipo = {"Chegada": None, "Saída": None}
+    for r in registros:
+        registros_por_tipo[r[0]] = (r[1], r[2])  # (file_id, hora)
+
+    resposta = (
+        f"📅 {data} - {corredor} - Sala {sala}\n\n"
+        f"🖼️ Chegada:\n"
+    )
+    
+    if registros_por_tipo["Chegada"]:
+        resposta += f"🕒 Hora: {registros_por_tipo['Chegada'][1]}\n"
+    else:
+        resposta += "❌ Não registrada\n"
+        
+    resposta += f"\n🖼️ Saída:\n"
+    if registros_por_tipo["Saída"]:
+        resposta += f"🕒 Hora: {registros_por_tipo['Saída'][1]}"
+    else:
+        resposta += "❌ Não registrada"
+    
+    query.edit_message_text(resposta)
+    
+    # Enviar fotos se existirem
+    if registros_por_tipo["Chegada"]:
+        context.bot.send_photo(
+            chat_id=update.effective_chat.id, 
+            photo=registros_por_tipo["Chegada"][0],
+            caption=f"Chegada - {data} - {registros_por_tipo['Chegada'][1]}"
+        )
+    if registros_por_tipo["Saída"]:
+        context.bot.send_photo(
+            chat_id=update.effective_chat.id, 
+            photo=registros_por_tipo["Saída"][0],
+            caption=f"Saída - {data} - {registros_por_tipo['Saída'][1]}"
+        )
+    
+    context.user_data.clear()
+    return ConversationHandler.END
 
 def main():
-    # Correção crucial: forma correta de inicializar o Updater
+    # Inicializa o Updater
     updater = Updater(TOKEN)
-    
     dp = updater.dispatcher
 
-    # Handlers
+    # Handlers básicos
     dp.add_handler(CommandHandler("start", start))
-    dp.add_handler(CommandHandler("ver", ver_registro))
     
     # Conversation Handler para registro
-    conv_handler = ConversationHandler(
+    conv_handler_registrar = ConversationHandler(
         entry_points=[CommandHandler("registrar", registrar)],
         states={
             ESCOLHER_CORREDOR: [CallbackQueryHandler(escolher_corredor, pattern="^corredor_")],
@@ -204,7 +337,30 @@ def main():
         },
         fallbacks=[]
     )
-    dp.add_handler(conv_handler)
+    dp.add_handler(conv_handler_registrar)
+    
+    # Conversation Handler para ver registros do dia
+    conv_handler_ver = ConversationHandler(
+        entry_points=[CommandHandler('ver', ver)],
+        states={
+            VER_CORREDOR: [CallbackQueryHandler(ver_corredor, pattern='^vercorredor_')],
+            VER_SALA: [CallbackQueryHandler(ver_sala, pattern='^versala_')],
+        },
+        fallbacks=[],
+    )
+    dp.add_handler(conv_handler_ver)
+    
+    # Conversation Handler para registros históricos
+    conv_handler_registros = ConversationHandler(
+        entry_points=[CommandHandler('registros', registros)],
+        states={
+            VER_CORREDOR: [CallbackQueryHandler(registros_sala, pattern='^rgs_corredor_')],
+            VER_SALA: [CallbackQueryHandler(registros_data, pattern='^rgs_sala_')],
+            VER_DATA: [CallbackQueryHandler(mostrar_registros, pattern='^rgs_data_')],
+        },
+        fallbacks=[],
+    )
+    dp.add_handler(conv_handler_registros)
 
     # Configuração para Render
     updater.start_webhook(
