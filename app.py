@@ -7,9 +7,8 @@ from telegram.ext import (
 )
 from datetime import datetime
 import sqlite3
-import re
 
-# Configurações do Render
+# Configurações
 TOKEN = os.environ.get('TELEGRAM_TOKEN')
 PORT = int(os.environ.get('PORT', 8443))
 
@@ -185,12 +184,15 @@ def ver_registro(update: Update, context: CallbackContext):
         context.bot.send_photo(update.effective_chat.id, saida[1])
 
 def main():
-    updater = Updater(TOKEN)
+    # Configuração correta para a versão 20.x
+    updater = Updater(token=TOKEN, use_context=True)
     dp = updater.dispatcher
 
+    # Handlers
     dp.add_handler(CommandHandler("start", start))
     dp.add_handler(CommandHandler("ver", ver_registro))
     
+    # Conversation Handler para registro
     conv_handler = ConversationHandler(
         entry_points=[CommandHandler("registrar", registrar)],
         states={
@@ -207,7 +209,7 @@ def main():
         listen="0.0.0.0",
         port=PORT,
         url_path=TOKEN,
-        webhook_url=f"https://your-render-app-name.onrender.com/{TOKEN}"
+        webhook_url=f"https://bot-fiscalizacao.onrender.com/{TOKEN}"
     )
     updater.idle()
 
