@@ -1,2 +1,2 @@
-python-telegram-bot>=20.0
-flask[async]>=2.0.0
+python-telegram-bot[socks]~=20.3
+flask~=2.2.0
