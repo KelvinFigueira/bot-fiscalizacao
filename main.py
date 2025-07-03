@@ -210,10 +210,10 @@ def main():
     async def set_webhook():
         await application.bot.set_webhook(WEBHOOK_URL)
     
-if __name__ == "__main__":
-    import asyncio
-    asyncio.run(set_webhook())
-    port = int(os.environ.get("PORT", 10000))
-    app.run(host="0.0.0.0", port=port)
+    if __name__ == "__main__":
+        import asyncio
+        asyncio.run(set_webhook())
+        port = int(os.environ.get("PORT", 10000))
+        app.run(host="0.0.0.0", port=port)
 
 main()
