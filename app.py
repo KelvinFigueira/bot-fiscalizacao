@@ -7,10 +7,14 @@ from telegram.ext import (
 )
 from datetime import datetime, timedelta
 import sqlite3
+import pytz  # Nova biblioteca para fusos horários
 
 # Configurações
 TOKEN = os.environ.get('TELEGRAM_TOKEN')
 PORT = int(os.environ.get('PORT', 8443))
+
+# Fuso horário de Manaus (UTC-4)
+MANAUS_TZ = pytz.timezone('America/Manaus')
 
 # Dados dos corredores
 CORREDORES = {
@@ -43,6 +47,11 @@ def init_db():
     conn.close()
 
 init_db()
+
+# Função para obter data/hora em Manaus
+def get_manaus_time():
+    utc_now = datetime.now(pytz.utc)
+    return utc_now.astimezone(MANAUS_TZ)
 
 # /start - Inicia o bot
 def start(update: Update, context: CallbackContext):
@@ -113,9 +122,9 @@ def escolher_tipo(update: Update, context: CallbackContext):
     tipo = query.data.split("_", 1)[1]
     
     user = query.from_user
-    now = datetime.now()
-    data_str = now.strftime("%Y-%m-%d")
-    hora_str = now.strftime("%H:%M")
+    now_manaus = get_manaus_time()  # Usando horário de Manaus
+    data_str = now_manaus.strftime("%Y-%m-%d")
+    hora_str = now_manaus.strftime("%H:%M")
     
     conn = sqlite3.connect('registros.db')
     c = conn.cursor()
@@ -137,12 +146,12 @@ def escolher_tipo(update: Update, context: CallbackContext):
         f"📍 {context.user_data['corredor']}\n"
         f"🔢 Sala {context.user_data['sala']}\n"
         f"🕒 {tipo}\n"
-        f"📆 {data_str} {hora_str}"
+        f"📆 {data_str} {hora_str} (Horário de Manaus)"
     )
     context.user_data.clear()
     return ConversationHandler.END
 
-# /ver - Consulta registros do dia atual
+# /ver - Consulta registros do dia atual em Manaus
 def ver(update: Update, context: CallbackContext):
     keyboard = [
         [InlineKeyboardButton(corredor, callback_data=f"vercorredor_{corredor}")]
@@ -178,7 +187,7 @@ def ver_sala(update: Update, context: CallbackContext):
     query.answer()
     sala = query.data.split("_", 1)[1]
     corredor = context.user_data['ver_corredor']
-    data_hoje = datetime.now().strftime("%Y-%m-%d")
+    data_hoje = get_manaus_time().strftime("%Y-%m-%d")  # Data atual em Manaus
     
     conn = sqlite3.connect('registros.db')
     c = conn.cursor()
@@ -192,7 +201,8 @@ def ver_sala(update: Update, context: CallbackContext):
     saida = next((r for r in registros if r[0] == "Saída"), None)
 
     resposta = (
-        f"📅 Hoje ({data_hoje}) - {corredor} - Sala {sala}\n\n"
+        f"📅 Hoje ({data_hoje}) - {corredor} - Sala {sala}\n"
+        f"⏰ Horário de Manaus (UTC-4)\n\n"
         f"🖼️ Chegada:\n"
         f"{'✅ Registrada' if chegada else '❌ Não registrada'}\n\n"
         f"🖼️ Saída:\n"
@@ -247,11 +257,11 @@ def registros_data(update: Update, context: CallbackContext):
     corredor = context.user_data['rgs_corredor']
     context.user_data['rgs_sala'] = sala
     
-    # Gerar botões para os últimos 7 dias
-    hoje = datetime.now()
+    # Gerar botões para os últimos 7 dias em Manaus
+    hoje_manaus = get_manaus_time()
     keyboard = []
     for i in range(7):
-        data = hoje - timedelta(days=i)
+        data = hoje_manaus - timedelta(days=i)
         data_str = data.strftime("%Y-%m-%d")
         keyboard.append([InlineKeyboardButton(data_str, callback_data=f"rgs_data_{data_str}")])
     
@@ -285,7 +295,8 @@ def mostrar_registros(update: Update, context: CallbackContext):
         registros_por_tipo[r[0]] = (r[1], r[2])  # (file_id, hora)
 
     resposta = (
-        f"📅 {data} - {corredor} - Sala {sala}\n\n"
+        f"📅 {data} - {corredor} - Sala {sala}\n"
+        f"⏰ Horário de Manaus (UTC-4)\n\n"
         f"🖼️ Chegada:\n"
     )
     
